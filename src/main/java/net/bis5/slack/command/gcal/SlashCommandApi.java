@@ -23,6 +23,10 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.Date;
 
+import org.apache.http.client.fluent.Request;
+import org.apache.http.entity.ContentType;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -32,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.api.client.util.DateTime;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
@@ -59,6 +64,11 @@ public class SlashCommandApi {
 	@Autowired
 	AppConfig config;
 
+	@RequestMapping(path = "/debug", method = RequestMethod.POST)
+	public ResponseEntity<String> execute(String body) {
+		return ResponseEntity.ok(body);
+	}
+
 	@RequestMapping(path = "/execute", method = RequestMethod.POST)
 	public ResponseEntity<String> execute(@ModelAttribute RequestPayload payload) {
 		log.info("Request: " + payload.toString());
@@ -70,11 +80,32 @@ public class SlashCommandApi {
 			Event result = client.events().insert(config.getTargetCalendarId(), createEvent(event)).execute();
 			log.info("Event Create Result: " + result.toString());
 
-			return ResponseEntity.ok("ok");
+			ResponsePayload response = new ResponsePayload();
+			Date date = toDate(event.getDate().atStartOfDay());
+			Date start = toDate(LocalDateTime.of(event.getDate(), event.getFrom()));
+			Date end = toDate(LocalDateTime.of(event.getDate(), event.getTo()));
+			String user = payload.getUser_name();
+			String title = event.getTitle();
+			response.setText(String.format("%sが予定を追加しました。\n・日付: %tY/%tm/%td\n・開始: %tH:%tM\n・終了: %tH:%tM\n・件名: %s", //
+					user, date, date, date, start, start, end, end, title));
+
+			try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+				ObjectMapper mapper = new ObjectMapper();
+				String responseBody = mapper.writeValueAsString(response);
+				log.info("Response Payload: " + responseBody);
+				Request.Post(payload.getResponse_url()).bodyString(responseBody, ContentType.APPLICATION_JSON)
+						.execute();
+			}
+
+			return ResponseEntity.ok(null);
 		} catch (IOException ex) {
 			log.error(ex.toString());
 			return ResponseEntity.ok(ex.getMessage()); // 全然OKじゃないけど、ユーザにレス返すので
 		}
+	}
+
+	private Date toDate(LocalDateTime dateTime) {
+		return Date.from(dateTime.toInstant(ZoneOffset.ofHours(+9)));
 	}
 
 	private Event createEvent(EventRequest request) {
