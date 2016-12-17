@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -60,8 +61,7 @@ public class AppConfig {
 	}
 
 	public String getTargetCalendarId() {
-		// FIXME 書かない
-		return env.getProperty("CALENDAR_ID", "ttb87p7p3p98omj2cs1l6t7lkc@group.calendar.google.com");
+		return Objects.requireNonNull(env.getProperty("CALENDAR_ID"), "env.CALENDAR_ID");
 	}
 
 	public JsonFactory jsonFactory() {
